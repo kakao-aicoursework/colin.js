@@ -25,7 +25,7 @@ def send_message(message_log, functions, gpt_model="gpt-3.5-turbo", temperature=
 
     if response_message.get("function_call"):
         available_functions = {
-            "find_kakao_channel_document": find_kakao_channel_document,
+            "find_kakao_db": find_kakao_db,
         }
         function_name = response_message["function_call"]["name"]
         fuction_to_call = available_functions[function_name]
@@ -42,18 +42,21 @@ def send_message(message_log, functions, gpt_model="gpt-3.5-turbo", temperature=
         print("function_response : ")
         print(function_response)
 
+        json_data = json.dumps(function_response, ensure_ascii=False)
+
+        print(function_response)
+
         # 함수를 실행한 결과를 GPT에게 보내 답을 받아오기 위한 부분
         message_log.append(response_message)  # GPT의 지난 답변을 message_logs에 추가하기
         message_log.append(
             {
                 "role": "function",
                 "name": function_name,
-                "content": function_response,
+                "content": json_data,
             }
         )  # 함수 실행 결과도 GPT messages에 추가하기
 
         print("message_log : ", message_log)
-
 
         response = openai.ChatCompletion.create(
             model=gpt_model,
@@ -63,10 +66,11 @@ def send_message(message_log, functions, gpt_model="gpt-3.5-turbo", temperature=
 
         print("response : ")
         print(response)
+        print(response.choices[0].message.content)
 
     return response.choices[0].message.content
 
-def find_kakao_channel_document(query: str):
+def find_kakao_db(query: str):
     client = chromadb.PersistentClient()
     kakao_channel_collection = client.get_or_create_collection(
         name="kakao-channel",
@@ -85,24 +89,25 @@ def find_kakao_channel_document(query: str):
         print("document : ")
         print(document)
 
+        docu_array = document.split(':')
+
         search_results.append(
             {
-                "docu": document
+                "title": docu_array[0],
+                "content": docu_array[1]
             }
         )
 
     return search_results
 
-def main():
-
-    #파일 읽기 및 정리
-    file = open('/Users/colin/llmProject/pythonProject1/uiTest/resources/project_data_카카오톡채널.txt','r', encoding='utf-8')
+def initial_setting():
+    # 파일 읽기 및 정리
+    file = open('/Users/colin/llmProject/pythonProject1/uiTest/resources/project_data_카카오톡채널.txt', 'r',
+                encoding='utf-8')
     contents = file.read()
 
     datas = []
     dataArray = contents.split('\n#')[1:]
-
-    print(dataArray)
 
     for data in dataArray:
         title, content = map(str.strip, data.split('\n', 1))
@@ -114,9 +119,6 @@ def main():
                 document = f"{title}:{text}"
                 datas.append(document)
 
-    print('디버깅중')
-    print(datas)
-
     file.close()  # 파일을 닫아주는 라인
 
     idx = 1
@@ -124,19 +126,17 @@ def main():
     documents = []
 
     for data in datas:
-        ids.append("id"+str(idx))
-        #datas = data.split(':')
+        ids.append("id" + str(idx))
+        # datas = data.split(':')
         documents.append(
             data
         )
         idx = idx + 1
 
-    print("documents : ")
-    print(documents)
-
     client = chromadb.PersistentClient()
 
-    #client.delete_collection(name="kakao-channel")
+    #적재된것이 있으면 삭제하고 새로 만듬
+    client.delete_collection(name="kakao-channel")
 
     kakao_channel_collection = client.get_or_create_collection(
         name="kakao-channel",
@@ -149,28 +149,26 @@ def main():
         ids=ids
     )
 
-    # DB 쿼리
-    result = kakao_channel_collection.query(
-        query_texts=["기능 소개 알려줄래?"],
-        n_results=1,
-    )
-    print(result)
-
+def main():
+    #파일 읽기 및 저장
+    initial_setting()
 
     message_log = [
         {
             "role": "system",
             "content": '''
-            You are Chatbot of the "Kakao Channel API" service. The main service users are Korean developers.
-            Please answer as kindly as possible and step by step so that the other person can understand. Step by step again to see if the answer is correct"
+            You are a Kakao chatbot.
+            If you have any questions about Kakao, please answer them as kindly as possible
+            Please answer in Korean
+            Please answer step by step so that others can understand. Please check again step by step if the answer is correct."
             '''
         }
     ]
 
     functions = [
         {
-            "name": "find_kakao_channel_document",
-            "description": "Find the document corresponding to the question in the DB introducing the KakaoTalk channel API.",
+            "name": "find_kakao_db",
+            "description": "Answer the questions related to Kakao",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -229,8 +227,6 @@ def main():
         window.update_idletasks()
         # '생각 중...' 팝업 창이 반드시 화면에 나타나도록 강제로 설정하기
         response = send_message(message_log, functions)
-
-        #response = find_db(user_input)
 
         thinking_popup.destroy()
 
