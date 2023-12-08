@@ -4,36 +4,10 @@ import tkinter as tk
 import pandas as pd
 from tkinter import scrolledtext
 import tkinter.filedialog as filedialog
-import markdown_to_json as md2json
 import os
+import chromadb
 
-openai.api_key = os.environ['API_KEY']
-
-
-# response에 CSV 형식이 있는지 확인하고 있으면 저장하기
-def save_to_csv(df):
-    file_path = filedialog.asksaveasfilename(defaultextension='.csv')
-    if file_path:
-        df.to_csv(file_path, sep=';', index=False, lineterminator='\n')
-        return f'파일을 저장했습니다. 저장 경로는 다음과 같습니다. \n {file_path}\n'
-    return '저장을 취소했습니다'
-
-
-def save_playlist_as_csv(playlist_csv):
-    if ";" in playlist_csv:
-        lines = playlist_csv.strip().split("\n")
-        csv_data = []
-
-        for line in lines:
-            if ";" in line:
-                csv_data.append(line.split(";"))
-
-        if len(csv_data) > 0:
-            df = pd.DataFrame(csv_data[1:], columns=csv_data[0])
-            return save_to_csv(df)
-
-    return f'저장에 실패했습니다. \n저장에 실패한 내용은 다음과 같습니다. \n{playlist_csv}'
-
+openai.api_key = os.environ['OPENAI_API_KEY']
 
 def send_message(message_log, functions, gpt_model="gpt-3.5-turbo", temperature=0.1):
     response = openai.ChatCompletion.create(
@@ -46,9 +20,12 @@ def send_message(message_log, functions, gpt_model="gpt-3.5-turbo", temperature=
 
     response_message = response["choices"][0]["message"]
 
+    print("response_message : ")
+    print(response_message)
+
     if response_message.get("function_call"):
         available_functions = {
-            "save_playlist_as_csv": save_playlist_as_csv,
+            "find_kakao_channel_document": find_kakao_channel_document,
         }
         function_name = response_message["function_call"]["name"]
         fuction_to_call = available_functions[function_name]
@@ -56,6 +33,14 @@ def send_message(message_log, functions, gpt_model="gpt-3.5-turbo", temperature=
         # 사용하는 함수에 따라 사용하는 인자의 개수와 내용이 달라질 수 있으므로
         # **function_args로 처리하기
         function_response = fuction_to_call(**function_args)
+
+        print("function_name : " + function_name)
+        print("fuction_to_call :")
+        print(fuction_to_call)
+        print("function_args :")
+        print(function_args)
+        print("function_response : ")
+        print(function_response)
 
         # 함수를 실행한 결과를 GPT에게 보내 답을 받아오기 위한 부분
         message_log.append(response_message)  # GPT의 지난 답변을 message_logs에 추가하기
@@ -66,49 +51,135 @@ def send_message(message_log, functions, gpt_model="gpt-3.5-turbo", temperature=
                 "content": function_response,
             }
         )  # 함수 실행 결과도 GPT messages에 추가하기
+
+        print("message_log : ", message_log)
+
+
         response = openai.ChatCompletion.create(
             model=gpt_model,
             messages=message_log,
             temperature=temperature,
         )  # 함수 실행 결과를 GPT에 보내 새로운 답변 받아오기
+
+        print("response : ")
+        print(response)
+
     return response.choices[0].message.content
 
+def find_kakao_channel_document(query: str):
+    client = chromadb.PersistentClient()
+    kakao_channel_collection = client.get_or_create_collection(
+        name="kakao-channel",
+        metadata={"hnsw:space": "cosine"}
+    )
+
+    query_result = kakao_channel_collection.query(
+        query_texts=[query],
+        n_results=1
+    )
+
+    print("query_result : ", query_result)
+
+    search_results = []
+    for document in query_result['documents'][0]:
+        print("document : ")
+        print(document)
+
+        search_results.append(
+            {
+                "docu": document
+            }
+        )
+
+    return search_results
+
 def main():
-    print("123")
-    file = open('/Users/colin/llmProject/pythonProject1/uiTest/resources/project_data_카카오톡채널.txt','r')
+
+    #파일 읽기 및 정리
+    file = open('/Users/colin/llmProject/pythonProject1/uiTest/resources/project_data_카카오톡채널.txt','r', encoding='utf-8')
     contents = file.read()
+
+    datas = []
+    dataArray = contents.split('\n#')[1:]
+
+    print(dataArray)
+
+    for data in dataArray:
+        title, content = map(str.strip, data.split('\n', 1))
+        contentArray = content.split('\n')
+        for text in contentArray:
+            if text == "":
+                continue
+            else:
+                document = f"{title}:{text}"
+                datas.append(document)
+
+    print('디버깅중')
+    print(datas)
+
     file.close()  # 파일을 닫아주는 라인
 
-    jsonStr = md2json.jsonify(contents)
+    idx = 1
+    ids = []
+    documents = []
 
-    print(jsonStr)
+    for data in datas:
+        ids.append("id"+str(idx))
+        #datas = data.split(':')
+        documents.append(
+            data
+        )
+        idx = idx + 1
 
-    #헤더를 ids를 사용해서 쓰면 벡터 디비에 업로드 할 수 있다.
+    print("documents : ")
+    print(documents)
+
+    client = chromadb.PersistentClient()
+
+    #client.delete_collection(name="kakao-channel")
+
+    kakao_channel_collection = client.get_or_create_collection(
+        name="kakao-channel",
+        metadata={"hnsw:space": "cosine"}
+    )
+
+    # DB 저장
+    kakao_channel_collection.add(
+        documents=documents,
+        ids=ids
+    )
+
+    # DB 쿼리
+    result = kakao_channel_collection.query(
+        query_texts=["기능 소개 알려줄래?"],
+        n_results=1,
+    )
+    print(result)
 
 
     message_log = [
         {
             "role": "system",
             "content": '''
-            You are a DJ assistant who creates playlists. Your user will be Korean, so communicate in Korean, but you must not translate artists' names and song titles into Korean.
-                - At first, suggest songs to make a playlist based on users' request. The playlist must contains the title, artist, and release year of each song in a list format. You must ask the user if they want to save the playlist as follow: "이 플레이리스트를 CSV로 저장하시겠습니까?"
+            You are Chatbot of the "Kakao Channel API" service. The main service users are Korean developers.
+            Please answer as kindly as possible and step by step so that the other person can understand. Step by step again to see if the answer is correct"
             '''
         }
     ]
 
     functions = [
         {
-            "name": "save_playlist_as_csv",
-            "description": "Saves the given playlist data into a CSV file when the user confirms the playlist.",
+            "name": "find_kakao_channel_document",
+            "description": "Find the document corresponding to the question in the DB introducing the KakaoTalk channel API.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "playlist_csv": {
+                    "query": {
                         "type": "string",
-                        "description": "A playlist in CSV format separated by ';'. It must contains a header and the release year should follow the 'YYYY' format. The CSV content must starts with a new line. The header of the CSV file must be in English and it should be formatted as follows: 'Title;Artist;Released'.",
+                        "description": "What are you curious about among the information related to Kakao channel",
                     },
                 },
-                "required": ["playlist_csv"],
+                "required": ["query"],
             },
         }
     ]
@@ -158,6 +229,9 @@ def main():
         window.update_idletasks()
         # '생각 중...' 팝업 창이 반드시 화면에 나타나도록 강제로 설정하기
         response = send_message(message_log, functions)
+
+        #response = find_db(user_input)
+
         thinking_popup.destroy()
 
         message_log.append({"role": "assistant", "content": response})

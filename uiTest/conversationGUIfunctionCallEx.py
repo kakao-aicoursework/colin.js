@@ -6,7 +6,7 @@ from tkinter import scrolledtext
 import tkinter.filedialog as filedialog
 import os
 
-openai.api_key = os.environ['API_KEY']
+openai.api_key = os.environ['OPENAI_API_KEY']
 
 
 # response에 CSV 형식이 있는지 확인하고 있으면 저장하기
