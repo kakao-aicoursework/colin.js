@@ -4,7 +4,7 @@ from fastapi import BackgroundTasks
 from fastapi.responses import HTMLResponse
 from dto import ChatbotRequest
 from samples import simple_text_sample, basic_card_sample, commerce_card_sample
-from callback import callback_handler
+from callback import callback_handler, callback_handler2
 import openai
 
 app = FastAPI()
@@ -45,7 +45,7 @@ async def skill(req: ChatbotRequest, background_tasks: BackgroundTasks):
 
     print("out 나간당")
 
-    background_tasks.add_task(callback_handler, req)
+    background_tasks.add_task(callback_handler2, req)
 
     return out
 
