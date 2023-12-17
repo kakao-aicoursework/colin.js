@@ -1,0 +1,3 @@
+kakao_channel: Related to a kakao channel api, like 카카오톡 채널 추가와 채팅, 카카오톡 채널 고객 관리등이 해당된다
+kakao_sync: Related to a kakao sync api, like 카카오톡 싱크 API, 서비스에 카카오싱크를 도입하는 과정등이 해당된다.
+kakao_social: Related to a kakao social api, like 카카오톡 소셜 API, 카카오톡 프로필, 카카오톡 친구 정보등을 질문등이 해당된다

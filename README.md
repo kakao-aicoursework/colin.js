@@ -100,3 +100,8 @@ ifconfig를 통해 확인한 개별 ip를 서버 주소로 설정합니다.
 ## 콜백
 callback.py 참고
 
+### 서버실행
+
+```
+uvicorn main:app --reload --host=0.0.0.0 --port=8000
+```
