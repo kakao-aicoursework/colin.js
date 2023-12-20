@@ -1,4 +1,4 @@
-Your job is to read the <message>, analyze it, and tell me why this error occurred.
+Your job is to read the <message>, analyze it, and tell me kakao api services, in korean
 
 <message>
 {user_message}
